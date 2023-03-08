@@ -1,8 +1,8 @@
 use crate::bin_structure::{
-  BinDctFooterEntry, BinDctFooterSubEntry, BinDctHeader, BinDctLineEntry,
-  FOOTER_ENTRY_SIZE, FOOTER_SUB_ENTRY_SIZE, HEADER_SIZE, LINE_ENTRY_SIZE,
+  BinDctFooterEntry, BinDctFooterSubEntry, BinDctHeader, BinDctLineEntry, FOOTER_ENTRY_SIZE,
+  FOOTER_SUB_ENTRY_SIZE, HEADER_SIZE, LINE_ENTRY_SIZE,
 };
-use crate::dct_map::DctLineError::{AttemptsExceeded, KeyAlreadyExists, KeyDoesNotExist};
+use crate::dct_map::DctLineError::{CapacityExceeded, KeyAlreadyExists, KeyDoesNotExist};
 use binrw::{BinRead, BinResult, BinWrite, NullString};
 use jenkins_hash::lookup2;
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 pub enum DctLineError {
   KeyDoesNotExist,
   KeyAlreadyExists,
-  AttemptsExceeded,
+  CapacityExceeded,
 }
 
 #[derive(Clone, Debug)]
@@ -224,16 +224,11 @@ impl DctMap {
     Ok(())
   }
 
-  fn mod_entry_lookup(&self, hashed_key: u32, attempts: Option<usize>) -> Option<usize> {
+  fn mod_entry_lookup(&self, hashed_key: u32) -> Option<usize> {
     let dct_capacity = self.line_entries.len();
 
-    let attempt_range = match attempts {
-      None => 0..dct_capacity,
-      Some(end) => 0..end,
-    };
-
     let mut position_guess = hashed_key as usize % dct_capacity;
-    for _ in attempt_range {
+    for _ in 0..dct_capacity {
       let line_entry_guess = &self.line_entries[position_guess];
 
       if line_entry_guess.line_id == hashed_key || line_entry_guess.line_id == 0 {
@@ -246,11 +241,11 @@ impl DctMap {
     None
   }
 
-  pub fn get_line_entry(&self, key: &str, attempts: Option<usize>) -> Result<&str, DctLineError> {
+  pub fn get_line_entry(&self, key: &str) -> Result<&str, DctLineError> {
     let hashed_key = lookup2(key.as_bytes(), self.initial_hash_value);
 
-    return match self.mod_entry_lookup(hashed_key, attempts) {
-      None => Err(AttemptsExceeded),
+    return match self.mod_entry_lookup(hashed_key) {
+      None => Err(KeyDoesNotExist),
       Some(entry_index) => {
         let entry = &self.line_entries[entry_index];
 
@@ -263,16 +258,11 @@ impl DctMap {
     };
   }
 
-  pub fn add_line_entry(
-    &mut self,
-    key: &str,
-    text: &str,
-    attempts: Option<usize>,
-  ) -> Result<(), DctLineError> {
+  pub fn add_line_entry(&mut self, key: &str, text: &str) -> Result<(), DctLineError> {
     let hashed_key = lookup2(key.as_bytes(), self.initial_hash_value);
 
-    return match self.mod_entry_lookup(hashed_key, attempts) {
-      None => Err(AttemptsExceeded),
+    return match self.mod_entry_lookup(hashed_key) {
+      None => Err(CapacityExceeded),
       Some(entry_index) => {
         let entry = &mut self.line_entries[entry_index];
 
@@ -310,12 +300,12 @@ mod tests {
     let mut dct_map = DctMap::new(0xDEADBEEF, 30, Vec::new());
 
     dct_map
-      .add_line_entry("wow", "cool", None)
+      .add_line_entry("wow", "cool")
       .expect("Could not add line entry.");
 
     assert_eq!(
       dct_map
-        .get_line_entry("wow", None)
+        .get_line_entry("wow")
         .expect("Could not get line entry."),
       "cool"
     );
