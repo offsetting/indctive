@@ -7,11 +7,15 @@ use binrw::{BinRead, BinResult, BinWrite, NullString};
 use jenkins_hash::lookup2;
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom, Write};
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum DctLineError {
-  KeyDoesNotExist,
-  KeyAlreadyExists,
+  #[error("the key `{0}` does not exist in this dct map")]
+  KeyDoesNotExist(String),
+  #[error("the key `{0}` does already exist in the this map")]
+  KeyAlreadyExists(String),
+  #[error("the capacity of this dct map is already at its maximum")]
   CapacityExceeded,
 }
 
@@ -245,12 +249,12 @@ impl DctMap {
     let hashed_key = lookup2(key.as_bytes(), self.initial_hash_value);
 
     return match self.mod_entry_lookup(hashed_key) {
-      None => Err(KeyDoesNotExist),
+      None => Err(KeyDoesNotExist(key.to_string())),
       Some(entry_index) => {
         let entry = &self.line_entries[entry_index];
 
         if entry.line_id == 0 {
-          return Err(KeyDoesNotExist);
+          return Err(KeyDoesNotExist(key.to_string()));
         }
 
         Ok(entry.text.as_ref().unwrap())
@@ -267,7 +271,7 @@ impl DctMap {
         let entry = &mut self.line_entries[entry_index];
 
         if entry.line_id == hashed_key {
-          return Err(KeyAlreadyExists);
+          return Err(KeyAlreadyExists(key.to_string()));
         }
 
         entry.line_id = hashed_key;
