@@ -2,6 +2,12 @@
 name = "indctive"
 version = "0.0.0-git"
 edition = "2021"
+authors = ["Team Offsetting"]
+description = "Rust library to read, edit, use and create .dct (DICT) files."
+readme = "README.md"
+repository = "https://github.com/offsetting/indctive"
+license = "Apache-2.0"
+license-file = "LICENSE"
 
 [dependencies]
 binrw = "0.11"
