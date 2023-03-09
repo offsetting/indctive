@@ -278,6 +278,10 @@ impl DctMap {
     };
   }
 
+  pub fn get_initial_hash_value(&self) -> u32 {
+    self.initial_hash_value
+  }
+
   pub fn get_max_capacity(&self) -> u32 {
     self.line_entries.len() as u32
   }
