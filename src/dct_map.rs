@@ -16,7 +16,7 @@ pub enum DctLineError {
 }
 
 #[derive(Clone, Debug)]
-pub struct LineEntry {
+struct LineEntry {
   pub line_id: u32,
   pub text: Option<String>,
 }
@@ -289,11 +289,47 @@ impl DctMap {
       .filter(|entry| entry.line_id != 0)
       .count() as u32
   }
+
+  pub fn iter_line_entries(&self) -> DctLineEntryIterator {
+    DctLineEntryIterator {
+      dct_map: self,
+      index: 0,
+    }
+  }
+}
+
+pub struct DctLineEntryIterator<'a> {
+  dct_map: &'a DctMap,
+  index: usize,
+}
+
+impl<'a> Iterator for DctLineEntryIterator<'a> {
+  type Item = (u32, &'a str);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    let capacity_map = self.dct_map.line_entries.len();
+    if capacity_map == 0 {
+      return None;
+    }
+
+    loop {
+      if self.index == capacity_map - 1 {
+        return None;
+      }
+
+      let entry = &self.dct_map.line_entries[self.index];
+      self.index += 1;
+      if entry.line_id != 0 {
+        return Some((entry.line_id.clone(), &entry.text.as_ref().unwrap()));
+      }
+    }
+  }
 }
 
 #[cfg(test)]
 mod tests {
   use crate::dct_map::DctMap;
+  use jenkins_hash::lookup2;
 
   #[test]
   fn test_add_and_get() {
@@ -312,5 +348,18 @@ mod tests {
 
     assert_eq!(dct_map.get_max_capacity(), 30);
     assert_eq!(dct_map.get_current_capacity(), 1);
+  }
+
+  #[test]
+  fn test_iterator() {
+    const INITIAL_HASH_VALUE: u32 = 0x1FEDBEEF;
+    let mut dct_map = DctMap::new(INITIAL_HASH_VALUE, 30, vec![]);
+
+    dct_map.add_line_entry("key1", "test1").unwrap();
+    dct_map.add_line_entry("key2", "test2").unwrap();
+
+    let iter_res: Vec<_> = dct_map.iter_line_entries().collect();
+    assert!(iter_res.contains(&(lookup2("key1".as_bytes(), INITIAL_HASH_VALUE), "test1")));
+    assert!(iter_res.contains(&(lookup2("key2".as_bytes(), INITIAL_HASH_VALUE), "test2")));
   }
 }
